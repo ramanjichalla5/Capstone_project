@@ -12,3 +12,5 @@ Example mock responses:
 ```
 
 Build locally with `docker build -t zepto-support support_assistant` and run with `docker run -p 7860:7860 zepto-support`.
+
+The graph nodes are `classify_intent`, `retrieve_and_answer`, and `direct_answer`; the conditional edge is selected from the state intent.
