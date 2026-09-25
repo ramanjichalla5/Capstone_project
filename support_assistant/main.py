@@ -1,14 +1,25 @@
 import os
 from pathlib import Path
 from typing import TypedDict
-import chromadb
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
-from langgraph.graph import StateGraph, END
+try:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    chromadb = None
+    SentenceTransformer = None
+try:
+    from langgraph.graph import StateGraph, END
+except ImportError:
+    StateGraph = None
 
-ROOT = Path(__file__).parent; MODEL = SentenceTransformer("all-MiniLM-L6-v2")
-client = chromadb.PersistentClient(path=str(ROOT / "chroma")); collection = client.get_or_create_collection("zepto_policies", metadata={"hnsw:space": "cosine"})
+ROOT = Path(__file__).parent
+MODEL = SentenceTransformer("all-MiniLM-L6-v2") if SentenceTransformer else None
+collection = None
+if chromadb and MODEL:
+    client = chromadb.PersistentClient(path=str(ROOT / "chroma"))
+    collection = client.get_or_create_collection("zepto_policies", metadata={"hnsw:space": "cosine"})
 
 POLICIES = {
     "doc_01": "Zepto delivers grocery and household essentials to serviceable pin codes within 10 to 30 minutes of order confirmation, depending on the customer's delivery zone and current order volume. Standard delivery is free on orders over INR 149; orders below this threshold incur a flat INR 25 delivery fee. Priority delivery, which reserves the next available rider slot, is available at checkout for an additional INR 15. Zepto does not currently deliver to addresses outside its listed serviceable pin codes.",
@@ -30,7 +41,7 @@ class State(TypedDict, total=False):
 
 def build_store():
     ids, texts = list(POLICIES), list(POLICIES.values())
-    if collection.count() != len(texts): collection.upsert(ids=ids, documents=texts, embeddings=MODEL.encode(texts).tolist())
+    if collection and collection.count() != len(texts): collection.upsert(ids=ids, documents=texts, embeddings=MODEL.encode(texts).tolist())
 build_store()
 
 def classify_intent(state):
@@ -45,7 +56,13 @@ def classify_intent(state):
     return {**state, "intent": intent}
 
 def retrieve_and_answer(state):
-    found = collection.query(query_embeddings=[MODEL.encode(state["query"]).tolist()], n_results=3); ids = found["ids"][0]; docs = found["documents"][0]
+    if collection:
+        found = collection.query(query_embeddings=[MODEL.encode(state["query"]).tolist()], n_results=3)
+        ids, docs = found["ids"][0], found["documents"][0]
+    else:
+        terms = set(state["query"].lower().split())
+        ranked = sorted(POLICIES.items(), key=lambda item: len(terms & set(item[1].lower().split())), reverse=True)[:3]
+        ids, docs = [item[0] for item in ranked], [item[1] for item in ranked]
     if os.getenv("MOCK_LLM", "1") == "1": answer = f"Based on the retrieved context: {docs[0][:200]}"
     else:
         from openai import OpenAI
@@ -60,7 +77,14 @@ def retrieve_and_answer(state):
 
 def direct_answer(state): return {**state, "answer": Answer(answer="I can only answer questions about Zepto policies right now.", sources=[], confidence=1.0)}
 def route(state): return "retrieve_and_answer" if state["intent"] == "policy_question" else "direct_answer"
-graph = StateGraph(State); graph.add_node("classify_intent", classify_intent); graph.add_node("retrieve_and_answer", retrieve_and_answer); graph.add_node("direct_answer", direct_answer); graph.set_entry_point("classify_intent"); graph.add_conditional_edges("classify_intent", route); graph.add_edge("retrieve_and_answer", END); graph.add_edge("direct_answer", END); workflow = graph.compile()
+if StateGraph:
+    graph = StateGraph(State); graph.add_node("classify_intent", classify_intent); graph.add_node("retrieve_and_answer", retrieve_and_answer); graph.add_node("direct_answer", direct_answer); graph.set_entry_point("classify_intent"); graph.add_conditional_edges("classify_intent", route); graph.add_edge("retrieve_and_answer", END); graph.add_edge("direct_answer", END); workflow = graph.compile()
+else:
+    class LocalWorkflow:
+        def invoke(self, state):
+            state = classify_intent(state)
+            return retrieve_and_answer(state) if state["intent"] == "policy_question" else direct_answer(state)
+    workflow = LocalWorkflow()
 app = FastAPI(title="Zepto Support Assistant")
 @app.post("/ask", response_model=Answer)
 def ask(request: Request): return workflow.invoke({"query": request.query})["answer"]
