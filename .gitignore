@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+data_pipeline/books.db
+data_pipeline/query_outputs.json
+analytics/*.png
+analytics/model_comparison.csv
+support_assistant/chroma/
