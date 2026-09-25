@@ -26,4 +26,4 @@ Then POST `{"query":"What is the delivery fee?"}` to `http://127.0.0.1:8000/ask`
 
 ## Design
 
-The data pipeline scrapes Books to Scrape, cleans values, applies the fixed `1 GBP = 105.50 INR` conversion, and loads normalized SQLite tables. The analytics pipeline loads Titanic once, writes the CSV fallback, performs the required EDA and train-only modeling workflow, and saves a complete fitted pipeline. The support assistant ingests the eight local policy documents into ChromaDB, routes questions through a LangGraph state graph, and exposes validated FastAPI JSON.
+The data pipeline scrapes Books to Scrape, cleans values, applies the fixed `1 GBP = 105.50 INR` conversion, and loads normalized SQLite tables. The analytics pipeline loads Titanic once, writes the CSV fallback, performs the required EDA and train-only modeling workflow, and saves a complete fitted pipeline. The support assistant embeds its eight policy texts from `main.py` into ChromaDB, routes questions through a LangGraph state graph, and exposes validated FastAPI JSON.

@@ -36,7 +36,7 @@ def main():
     if db.exists(): db.unlink()
     with sqlite3.connect(db) as con:
         con.execute("PRAGMA foreign_keys=ON")
-        con.executescript("CREATE TABLE categories(category_id INTEGER PRIMARY KEY, category_name TEXT UNIQUE); CREATE TABLE books(book_id INTEGER PRIMARY KEY, title TEXT, price_gbp REAL, price_inr REAL, rating INTEGER, in_stock INTEGER, category_id INTEGER REFERENCES categories(category_id));")
+        con.executescript((ROOT / "schema.sql").read_text(encoding="utf-8"))
         cats = pd.DataFrame({"category_name": df.category.unique()}); cats.to_sql("categories", con, if_exists="append", index=False)
         ids = pd.read_sql("SELECT * FROM categories", con)
         out = df.merge(ids, left_on="category", right_on="category_name").drop(columns=["category", "category_name"])

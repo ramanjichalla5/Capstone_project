@@ -1,0 +1,2 @@
+CREATE TABLE categories(category_id INTEGER PRIMARY KEY, category_name TEXT UNIQUE);
+CREATE TABLE books(book_id INTEGER PRIMARY KEY, title TEXT, price_gbp REAL, price_inr REAL, rating INTEGER, in_stock INTEGER, category_id INTEGER REFERENCES categories(category_id));
